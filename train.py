@@ -19,13 +19,14 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from dataset.cifar import get_cifar10, get_cifar100
+from dataset.dataset import get_cifar10, get_cifar100, get_shopee
 from utils import AverageMeter, accuracy
 
 logger = logging.getLogger(__name__)
 
 DATASET_GETTERS = {'cifar10': get_cifar10,
-                   'cifar100': get_cifar100}
+                   'cifar100': get_cifar100, 
+                   'shopee': get_shopee}
 best_acc = 0
 
 

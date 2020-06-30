@@ -1,7 +1,10 @@
 import logging
 
 import numpy as np
+import os
+import pandas as pd
 from PIL import Image
+import torch
 from torchvision import datasets
 from torchvision import transforms
 
@@ -13,9 +16,52 @@ cifar10_mean = (0.4914, 0.4822, 0.4465)
 cifar10_std = (0.2471, 0.2435, 0.2616)
 cifar100_mean = (0.5071, 0.4867, 0.4408)
 cifar100_std = (0.2675, 0.2565, 0.2761)
+
+# for shopee dataset
+shopee_mean = ()
+shopee_std = () 
+shopee_num_classes = 42
+
 normal_mean = (0.5, 0.5, 0.5)
 normal_std = (0.5, 0.5, 0.5)
 
+
+def get_shopee(root, num_labeled, num_expand_x, num_expand_u):
+    transform_labeled = transforms.Compose([
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomCrop(size=32,
+                              padding=int(32*0.125),
+                              padding_mode='reflect'),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=shopee_mean, std=shopee_std)
+    ])
+    transform_val = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean=shopee_mean, std=shopee_std)
+    ])
+    base_dataset = datasets.SHOPEESSL(root, train=True)
+
+    train_labeled_idxs, train_unlabeled_idxs = x_u_split(
+        base_dataset.targets, num_labeled, num_expand_x, num_expand_u, num_classes=shopee_num_classes)
+
+    train_labeled_dataset = SHOPEESSL(
+        root, train_labeled_idxs, train=True,
+        transform=transform_labeled)
+
+    train_unlabeled_dataset = SHOPEESSL(
+        root, train_unlabeled_idxs, train=True,
+        transform=TransformFix(mean=shopee_mean, std=shopee_std))
+
+    # ! 
+    # test_dataset = datasets.SHOPEE(
+    #     root, train=False, transform=transform_val, download=False)
+
+
+    logger.info("Dataset: SHOPEE")
+    logger.info(f"Labeled examples: {len(train_labeled_idxs)}"
+                f" Unlabeled examples: {len(train_unlabeled_idxs)}")
+
+    return train_labeled_dataset, train_unlabeled_dataset, test_dataset
 
 def get_cifar10(root, num_labeled, num_expand_x, num_expand_u):
     transform_labeled = transforms.Compose([
@@ -151,6 +197,31 @@ class TransformFix(object):
         strong = self.strong(x)
         return self.normalize(weak), self.normalize(strong)
 
+class SHOPEESSL(datasets):
+    def __init__(self, csv_file, root_dir='./', train=True, 
+                transform=None, target_transform=None):
+        df = pd.read_csv(csv_file)
+        df['filename'] = df['category'] + '/' + df['filename']
+        df['category'] = df['category'].map(lambda x: "{:02d}".format(int(x)))
+        self.filenames = df['filename'].tolist()
+        self.targets = df['category'].tolist()
+        self.transform = transform
+        
+    def __getitem__(self, index):
+        if torch.is_tensor(index):
+            index = index.tolist()
+
+        img_name = os.path.join(self.root_dir, self.filenames[index])
+        img, target = Image.fromarray(img_name), self.targets[index]
+        
+        if self.transform is not None:
+            img = self.transform(img)
+
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return img, target
+        
 
 class CIFAR10SSL(datasets.CIFAR10):
     def __init__(self, root, indexs, train=True,
